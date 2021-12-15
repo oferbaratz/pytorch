@@ -4,6 +4,8 @@ import io
 import os
 import sys
 import torch
+from torch.testing import FileCheck
+from typing import Union
 
 # Make the helper files in test/ importable
 pytorch_test_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -81,3 +83,97 @@ class TestUpgraders(JitTestCase):
         upgraders_dump_after_remove_test = torch._C._dump_upgraders_map()
         self.assertTrue("a" not in upgraders_dump_after_remove_test)
         self.assertTrue("c" not in upgraders_dump_after_remove_test)
+
+    def test_aten_div_tensor_at_3(self):
+        model_path = pytorch_test_dir + "/cpp/jit/div_at_version_3.pt"
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check("prim::If").run(loaded_model.graph)
+        FileCheck().check_count("aten::div", 2).run(loaded_model.graph)
+
+        buffer = io.BytesIO()
+        torch.jit.save(loaded_model, buffer)
+        buffer.seek(0)
+        loaded_model_twice = torch.jit.load(buffer)
+        # we check by its' code because graph variable names
+        # can be different every time
+        self.assertEqual(loaded_model.code, loaded_model_twice.code)
+
+    def test_aten_test_serialization(self):
+        model_path = pytorch_test_dir + "/jit/fixtures/_test_serialization_subcmul_v2.pt"
+
+        # add test version entry to the version map
+        upgrader_bumped_version = 3
+        upgrader_name = "_test_serialization_subcmul_0_2"
+        upgrader_schema = "aten::_test_serialization_subcmul(Tensor self, Tensor other, Scalar alpha=2) -> Tensor"
+        dummy_entry = torch._C._UpgraderEntry(upgrader_bumped_version, upgrader_name, upgrader_schema)
+
+        torch._C._test_only_add_entry_to_op_version_map("aten::_test_serialization_subcmul", dummy_entry)
+
+        # add test upgrader in the upgraders map
+        @torch.jit.script
+        def _test_serialization_subcmul_0_2(self: torch.Tensor, other: torch.Tensor, alpha: Union[int, float]=2) -> torch.Tensor:
+            return other - (self * alpha)
+
+        torch._C._test_only_populate_upgraders({"_test_serialization_subcmul_0_2": str(_test_serialization_subcmul_0_2.graph)})
+
+        # test if the server is able to find the test upgraders and apply to IR
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check_count("aten::mul", 2).run(loaded_model.graph)
+        FileCheck().check_count("aten::sub", 2).run(loaded_model.graph)
+
+        buffer = io.BytesIO()
+        torch.jit.save(loaded_model, buffer)
+        buffer.seek(0)
+        loaded_model_twice = torch.jit.load(buffer)
+        # we check by its' code because graph variable names
+        # can be different every time
+        self.assertEqual(loaded_model.code, loaded_model_twice.code)
+        torch._C._test_only_remove_entry_to_op_version_map("aten::_test_serialization_subcmul")
+        torch._C._test_only_remove_upgraders({"_test_serialization_subcmul_0_2": str(_test_serialization_subcmul_0_2.graph)})
+
+    def test_aten_div_scalar_at_3(self):
+        model_path = pytorch_test_dir + "/jit/fixtures/test_versioned_div_scalar_float_v3.pt"
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check("prim::If").run(loaded_model.graph)
+        FileCheck().check_count("aten::div", 2).run(loaded_model.graph)
+
+        buffer = io.BytesIO()
+        torch.jit.save(loaded_model, buffer)
+        buffer.seek(0)
+        loaded_model_twice = torch.jit.load(buffer)
+
+        self.assertEqual(loaded_model(torch.Tensor([5.0, 3.0]), 2.0),
+                         loaded_model_twice(torch.Tensor([5.0, 3.0]), 2.0))
+
+    def test_aten_div_tensor_out_at_3(self):
+        model_path = pytorch_test_dir + "/jit/fixtures/test_versioned_div_tensor_out_v3.pt"
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check("prim::If").run(loaded_model.graph)
+        FileCheck().check_count("aten::div", 2).run(loaded_model.graph)
+
+        buffer = io.BytesIO()
+        torch.jit.save(loaded_model, buffer)
+        buffer.seek(0)
+        loaded_model_twice = torch.jit.load(buffer)
+        # we check by its' code because graph variable names
+        # can be different every time
+        self.assertEqual(loaded_model.code, loaded_model_twice.code)
+
+    def test_aten_full_at_4(self):
+        model_path = pytorch_test_dir + "/jit/fixtures/test_versioned_full_integer_value_v4.pt"
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check_count("aten::Float", 1).run(loaded_model.graph)
+        FileCheck().check_count("aten::full", 2).run(loaded_model.graph)
+
+        buffer = io.BytesIO()
+        torch.jit.save(loaded_model, buffer)
+        buffer.seek(0)
+        loaded_model_twice = torch.jit.load(buffer)
+        # we check by its' code because graph variable names
+        # can be different every time
+        self.assertEqual(loaded_model.code, loaded_model_twice.code)
+
+    def test_aten_full_out_at_4(self):
+        model_path = pytorch_test_dir + "/jit/fixtures/test_versioned_full_preserved_v4.pt"
+        loaded_model = torch.jit.load(model_path)
+        FileCheck().check_count("aten::full", 5).run(loaded_model.graph)

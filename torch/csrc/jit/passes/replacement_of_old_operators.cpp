@@ -1,7 +1,7 @@
 #include <torch/csrc/jit/passes/replacement_of_old_operators.h>
 
 #include <c10/util/Exception.h>
-#include <caffe2/serialize/versions.h>
+#include <torch/csrc/jit/frontend/schema_matching.h>
 #include <torch/csrc/jit/ir/irparser.h>
 #include <torch/csrc/jit/operator_upgraders/upgraders.h>
 #include <torch/csrc/jit/operator_upgraders/utils.h>
@@ -27,9 +27,7 @@ struct OldOpsReplacer {
     int updated_version = 0;
     while (node) {
       if (auto schema = node->maybeSchema()) {
-        auto schema_name = schema->name() +
-            (schema->overload_name() != "" ? "." + schema->overload_name()
-                                           : "");
+        auto schema_name = getFullSchemaName(*schema);
         // this implies there was a version bump because of this operator
         auto version_entry = get_operator_version_map().find(schema_name);
         if (version_entry != get_operator_version_map().end()) {

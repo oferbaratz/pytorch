@@ -22,6 +22,7 @@
 #include <torch/csrc/jit/passes/lift_closures.h>
 #include <torch/csrc/jit/passes/lower_tuples.h>
 #include <torch/csrc/jit/passes/normalize_ops.h>
+#include <torch/csrc/jit/passes/replacement_of_old_operators.h>
 #include <torch/csrc/jit/runtime/interpreter.h>
 #include <torch/csrc/jit/runtime/operator.h>
 #include <torch/csrc/jit/runtime/slice_indices_adjust.h>
@@ -655,6 +656,11 @@ struct to_ir {
           << "methods must have a self argument";
     }
     method.setSchema(emitDef(def, self, graph->block()));
+
+    // At this point, we might have received a graph that is compiled with
+    // old operator schemas that might not exist in the system anymore.
+    // Therefore, we replace such ops with its' valid upgrader.
+    ApplyOldOpsUpgraders(graph);
 
     // NB ORDERING: SSA conversion has to occur before
     // lifting of closures and forks, this way closures are converted

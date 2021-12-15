@@ -6,7 +6,7 @@ namespace caffe2 {
 namespace serialize {
 
 constexpr uint64_t kMinSupportedFileFormatVersion = 0x1L;
-constexpr uint64_t kMaxSupportedFileFormatVersion = 0x6L;
+constexpr uint64_t kMaxSupportedFileFormatVersion = 0x7L;
 
 // Versions (i.e. why was the version number bumped?)
 
@@ -47,7 +47,10 @@ constexpr uint64_t kMaxSupportedFileFormatVersion = 0x6L;
 // 5. (Dynamic) Stops torch.full inferring a floating point dtype
 //      when given bool or integer fill values.
 // 6. Write version string to `./data/version` instead of `version`.
-constexpr uint64_t kProducedFileFormatVersion = 0x3L;
+
+// TODO: this needs to be more descriptive, but for now we know that the global
+// operator version number is at 7.
+constexpr uint64_t kProducedFileFormatVersion = 0x7L;
 
 // The version we write when the archive contains bytecode.
 // It must be higher or eq to kProducedFileFormatVersion.
