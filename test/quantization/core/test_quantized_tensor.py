@@ -165,7 +165,7 @@ class TestQuantizedTensor(TestCase):
             scale, zero_pt = _calculate_dynamic_qparams(mat2quant, dtype, reduce_flag)
             q_s = torch.quantize_per_tensor(mat2quant, scale, zero_pt, dtype)
 
-            self.assertEqual(q_d, q_s)
+            self.assertEqual(q_d, q_s, rtol=1.3e-6, atol=1e-5)
 
     def _test_qtensor(self, device):
         device = str(device)
@@ -813,8 +813,13 @@ class TestQuantizedTensor(TestCase):
                 [numel], scale=scale, zero_point=zero_point,
                 device=device, dtype=dtype)
             per_channel_quantized = torch._empty_per_channel_affine_quantized(
-                [numel], scales=torch.tensor([scale]), zero_points=torch.tensor([zero_point]), axis=0,
-                device=device, dtype=dtype)
+                [numel],
+                scales=torch.tensor([scale] * numel, device=device),
+                zero_points=torch.tensor([zero_point] * numel, device=device),
+                axis=0,
+                device=device,
+                dtype=dtype
+            )
             qtensors = [per_tensor_quantized, per_channel_quantized]
 
             for q in qtensors:
