@@ -2,7 +2,7 @@
 
 // ${generated_comment}
 
-#include <ATen/ATen.h>
+#include <ATen/core/Tensor.h>
 #include <ATen/TracerMode.h>
 #include <ATen/core/grad_mode.h>
 #include <c10/util/ArrayRef.h>
@@ -11,6 +11,13 @@
 #include <torch/csrc/autograd/variable.h>
 #include <torch/csrc/jit/frontend/tracer.h>
 #include <torch/csrc/jit/ir/ir.h>
+
+#ifndef AT_PER_OPERATOR_HEADERS
+#include <ATen/Functions.h>
+#else
+#include <ATen/ops/from_blob.h>
+$ops_headers
+#endif
 
 #include <functional>
 #include <initializer_list>
