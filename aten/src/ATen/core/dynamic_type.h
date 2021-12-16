@@ -125,6 +125,8 @@ class DynamicType : public Type {
   static const TypeKind Kind = TypeKind::DynamicType;
   static TORCH_API DynamicTypePtr create(Type& ty);
 
+  explicit DynamicType(Tag, Arguments);
+
  private:
   friend struct Type;
   static std::shared_ptr<const DynamicType> create(const Type& ty);
