@@ -1122,7 +1122,7 @@ at::Tensor _convolution(
           input.contiguous(backend_memory_format), weight, bias, params.padding, params.output_padding,
           params.stride, params.dilation, params.groups, params.benchmark, params.deterministic);
       break;
-    case ConvBackend::Mkldnn:
+    case ConvBackend::Mkldnn: {
 #if AT_MKLDNN_ENABLED()
       TORCH_CHECK(input.options().type_equal(weight.options())
           || (input.is_mkldnn() && weight.device().is_cpu() && weight.scalar_type() == kFloat),
@@ -1132,10 +1132,14 @@ at::Tensor _convolution(
           || (input.is_mkldnn() && bias.device().is_cpu() && bias.scalar_type() == kFloat),
           "Input type (", input.toString(), ") and bias type (", bias.toString(),
           ") should be the same or input should be a MKLDNN tensor and bias is a dense tensor");
+      bool use_channels_last = input.suggest_memory_format() == at::MemoryFormat::ChannelsLast ||
+          weight.suggest_memory_format() == at::MemoryFormat::ChannelsLast;
+      auto mkldnn_memory_format = use_channels_last ? at::MemoryFormat::ChannelsLast
+          : at::MemoryFormat::Contiguous;
       if (!input.is_mkldnn()) {
         // need to ensure contiguous for non-mkldnn tensors
-        input = input.contiguous();
-        weight = weight.contiguous();
+        input = input.contiguous(mkldnn_memory_format);
+        weight = weight.contiguous(mkldnn_memory_format);
         bias = bias.defined() ? bias.contiguous() : bias;
       }
       output = at::mkldnn_convolution(
@@ -1144,6 +1148,7 @@ at::Tensor _convolution(
       TORCH_INTERNAL_ASSERT(false, "Mkldnn backend was selected in PyTorch compiled without mkldnn support");
 #endif
       break;
+    }
     case ConvBackend::MkldnnEmpty:
 #if AT_MKLDNN_ENABLED()
       output = empty_mkldnn(
