@@ -610,6 +610,9 @@ bool Type::isSubtypeOfExt(const Type& rhs, std::ostream* why_not) const {
                          return this->isSubtypeOfExt(*inner, why_not);
                        });
   }
+  if (auto dyn = rhs.castRaw<DynamicType>()) {
+    return DynamicType::create(*this)->isSubtypeOf(*dyn);
+  }
   return false;
 }
 
@@ -836,6 +839,17 @@ TupleTypePtr TupleType::createNamed(const c10::optional<c10::QualifiedName>& qua
       /*returns=*/std::vector<Argument>{});
   return std::shared_ptr<TupleType>(new TupleType(
       field_types, qualName, schema)); // NOLINT(modernize-make-shared)
+}
+
+c10::optional<std::vector<c10::string_view>> TupleType::names() const {
+  if (!schema_) {
+    return {};
+  }
+  std::vector<c10::string_view> ret;
+  for (const auto& arg : schema_->arguments()) {
+    ret.emplace_back(arg.name());
+  }
+  return ret;
 }
 
 bool NoneType::isSubtypeOfExt(const Type& rhs, std::ostream *why_not) const {

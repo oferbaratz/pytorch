@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ATen/core/jit_type_base.h>
+#include <ATen/core/dynamic_type.h>
 #include <ATen/core/TensorBody.h>
 #include <ATen/core/functional.h>
 #include <ATen/core/interned_strings.h>
@@ -1048,6 +1049,7 @@ struct TORCH_API TupleType : public NamedType {
   const std::shared_ptr<FunctionSchema>& schema() const {
     return schema_;
   }
+  c10::optional<std::vector<c10::string_view>> names() const;
 
   static const TypeKind Kind = TypeKind::TupleType;
 
