@@ -1,3 +1,4 @@
+#define TORCH_ASSERT_ONLY_METHOD_OPERATORS
 #include <c10/macros/Export.h>
 #include <c10/util/flat_hash_map.h>
 #include <c10/util/irange.h>
@@ -6,6 +7,8 @@
 
 #include <torch/csrc/jit/frontend/tracer.h>
 #include <torch/csrc/jit/runtime/operator.h>
+
+#include <ATen/Context.h>
 
 #include <sstream>
 #include <stdexcept>
