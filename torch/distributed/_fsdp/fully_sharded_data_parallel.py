@@ -191,6 +191,8 @@ class FullyShardedDataParallel(nn.Module):
 
         # Flag to guard against preparing gradients multiple times per backward pass.
         self._pre_backward_hook_has_run = False
+        # Used for prefetching all gather full params in post backward hook
+        self._need_rebuild_full_params = False
 
         # If specified, offload parameter shard to CPU.
         if self.cpu_offload.offload_params:
@@ -352,6 +354,8 @@ class FullyShardedDataParallel(nn.Module):
         """
         self._is_root: Optional[bool] = None
         self._streams: Dict[str, torch.cuda.Stream] = {}
+        self._fsdp_graph_order: List[nn.Module] = []
+        self._my_fsdp_idx_in_graph: Optional[int] = None
         for p in self.params:
             if hasattr(p, "_local_shard"):
                 # reset attributes that are added in _init_param_attributes, as
@@ -519,6 +523,7 @@ class FullyShardedDataParallel(nn.Module):
         for n, m in self.named_modules():
             if n != "" and isinstance(m, FullyShardedDataParallel):
                 m._streams = self._streams
+                m._fsdp_graph_order = self._fsdp_graph_order
 
     def _wait_for_previous_optim_step(self) -> None:
         """
@@ -546,6 +551,10 @@ class FullyShardedDataParallel(nn.Module):
         self._register_post_backward_hooks()
 
         outputs = self.module(*args, **kwargs)
+
+        if self not in self._fsdp_graph_order:
+            self._my_fsdp_idx_in_graph = len(self._fsdp_graph_order)
+            self._fsdp_graph_order.append(self)
 
         if self.reshard_after_forward:
             self._free_full_params()
@@ -609,6 +618,7 @@ class FullyShardedDataParallel(nn.Module):
         def _register_hook(t: torch.Tensor) -> torch.Tensor:
             if t.requires_grad:
                 t.register_hook(_pre_backward_hook)
+                self._need_rebuild_full_params = True
             return t
 
         # Attach hooks to Tensor outputs.
@@ -701,9 +711,22 @@ class FullyShardedDataParallel(nn.Module):
         # Switch to local shard after backward.
         self._use_param_local_shard([param])
 
+        # Prefetch previous layer's full params in backward pass
+        # If next layer's backward computation is done and full params are freed,
+        # no need to prefetch the full params again.
+        # Only prefetch full params if any of the next layer's outputs requires grad
+        if (
+            self._fsdp_graph_order is not None
+            and self._my_fsdp_idx_in_graph is not None and self._my_fsdp_idx_in_graph > 0
+            and self._fsdp_graph_order[self._my_fsdp_idx_in_graph - 1].training_state != TrainingState_.BACKWARD_POST
+            and self._fsdp_graph_order[self._my_fsdp_idx_in_graph - 1]._need_rebuild_full_params
+        ):
+            self._fsdp_graph_order[self._my_fsdp_idx_in_graph - 1]._rebuild_full_params()  # type: ignore[operator]
+
         # Wait for all work in the current stream to finish, then start the
         # reductions in post_backward stream.
         self._streams["post_backward"].wait_stream(torch.cuda.current_stream())
+
         with torch.cuda.stream(self._streams["post_backward"]):
             orig_grad_data = param.grad.data
 
