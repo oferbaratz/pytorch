@@ -58,6 +58,7 @@ enum class ConvBackend {
   MiopenDepthwise,
   MiopenTranspose,
   Mkldnn,
+  MkldnnTranspose,
   MkldnnEmpty,
   NnpackSpatial,
   Overrideable,
